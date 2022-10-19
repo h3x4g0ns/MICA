@@ -44,6 +44,8 @@ then you need to unzip them and place in `~/.insightface/models/`. The `install.
 
 To use MICA you can simply run the `demo.py` file. It will process all the images from `demo/input/` folder and create the output destination for each subject with `.ply` mesh, rendered image, and `.npy` FLAME parameters.
 
+> This fork contains `runner.py` which is a less involved processor -- simply outputting the `.obj` and the corresponding `.jpg` render given a directory of images.
+
 ### Dataset and Training
 
 The MICA dataset consists of eight smaller datasets for about 2300 subjects under a common FLAME topology. Read more information about how to obtain and use it under the [link](https://github.com/Zielon/MICA/tree/master/datasets/). To train MICA the images from all eight datasets are needed. The repository contains scripts how to generate the Arcface input images as well as the complete list of all the images used for the training. More information can be found [here](https://github.com/Zielon/MICA/tree/master/datasets).
