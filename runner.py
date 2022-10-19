@@ -15,8 +15,7 @@
 # Contact: mica@tue.mpg.de
 
 
-import argparse
-import os
+import os, sys
 import random
 from glob import glob
 from pathlib import Path
@@ -37,6 +36,10 @@ from configs.config import get_cfg_defaults
 from datasets.creation.util import get_arcface_input, get_center
 from utils import util
 
+INPUT = "../age-classification/data/generated-faces/generated.photos"
+OUTPUT = "../age-classification/data/generated-faces/mica"
+ARCFACE = "../age-classification/data/generated-faces/arcface"
+
 
 def deterministic(rank):
     torch.manual_seed(rank)
@@ -48,11 +51,11 @@ def deterministic(rank):
     cudnn.benchmark = False
 
 
-def process(args, app, image_size=224):
-    dst = Path(args.a)
+def process(app, image_size=224):
+    dst = Path(ARCFACE)
     dst.mkdir(parents=True, exist_ok=True)
     processes = []
-    image_paths = sorted(glob(args.i + '/*.*'))
+    image_paths = sorted(glob(INPUT + '/*.*'))
     for image_path in tqdm(image_paths):
         name = Path(image_path).stem
         img = cv2.imread(image_path)
@@ -92,29 +95,29 @@ def to_batch(path):
 
 
 def load_checkpoint(args, mica):
-    checkpoint = torch.load(args.m)
+    checkpoint = torch.load(args)
     if 'arcface' in checkpoint:
         mica.arcface.load_state_dict(checkpoint['arcface'])
     if 'flameModel' in checkpoint:
         mica.flameModel.load_state_dict(checkpoint['flameModel'])
 
 
-def main(cfg, args):
+def main(cfg):
     device = 'cuda:0'
     cfg.model.testing = True
     mica = util.find_model_using_name(model_dir='micalib.models', model_name=cfg.model.name)(cfg, device)
-    load_checkpoint(args, mica)
+    load_checkpoint("data/pretrained/mica.tar", mica)
     mica.eval()
 
     faces = mica.render.faces[0].cpu()
-    Path(args.o).mkdir(exist_ok=True, parents=True)
+    Path("output").mkdir(exist_ok=True, parents=True)
 
     app = FaceAnalysis(name='antelopev2', providers=['CUDAExecutionProvider'])
     app.prepare(ctx_id=0, det_size=(224, 224))
 
     with torch.no_grad():
         logger.info(f'Processing has started...')
-        paths = process(args, app)
+        paths = process(app)
         for path in tqdm(paths):
             name = Path(path).stem
             images, arcface = to_batch(path)
@@ -131,27 +134,26 @@ def main(cfg, args):
             image = (rendering[0].cpu().numpy().transpose(1, 2, 0).copy() * 255)[:, :, [2, 1, 0]]
             image = np.minimum(np.maximum(image, 0), 255).astype(np.uint8)
 
-            dst = Path(args.o, name)
+            dst = Path(OUTPUT)
             dst.mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(f'{dst}/render.jpg', image)
-            save_ply(f'{dst}/mesh.ply', verts=mesh.cpu() * 1000.0, faces=faces)  # save in millimeters
-            save_obj(f'{dst}/mesh.obj', verts=mesh.cpu() * 1000.0, faces=faces)
-            np.save(f'{dst}/identity', code[0].cpu().numpy())
-            np.save(f'{dst}/kpt7', landmark_7.cpu().numpy() * 1000.0)
-            np.save(f'{dst}/kpt68', lmk.cpu().numpy() * 1000.0)
+            cv2.imwrite(f'{OUTPUT}/{name}.jpg', image)
+            # save_ply(f'{dst}/mesh.ply', verts=mesh.cpu() * 1000.0, faces=faces)  # save in millimeters
+            save_obj(f'{OUTPUT}/{name}.obj', verts=mesh.cpu() * 1000.0, faces=faces)
+            # np.save(f'{dst}/identity', code[0].cpu().numpy())
+            # np.save(f'{dst}/kpt7', landmark_7.cpu().numpy() * 1000.0)
+            # np.save(f'{dst}/kpt68', lmk.cpu().numpy() * 1000.0)
 
-        logger.info(f'Processing finished. Results has been saved in {args.o}')
+        logger.info(f'Processing finished. Results has been saved in {OUTPUT}')
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='MICA - Towards Metrical Reconstruction of Human Faces')
-    parser.add_argument('-i', default='demo/input', type=str, help='Input folder with images')
-    parser.add_argument('-o', default='demo/output', type=str, help='Output folder')
-    parser.add_argument('-a', default='demo/arcface', type=str, help='Processed images for MICA input')
-    parser.add_argument('-m', default='data/pretrained/mica.tar', type=str, help='Pretrained model path')
+    # parser = argparse.ArgumentParser(description='MICA - Towards Metrical Reconstruction of Human Faces')
+    # parser.add_argument('-i', default='demo/input', type=str, help='Input folder with images')
+    # parser.add_argument('-o', default='demo/output', type=str, help='Output folder')
+    # parser.add_argument('-a', default='demo/arcface', type=str, help='Processed images for MICA input')
+    # parser.add_argument('-m', default='data/pretrained/mica.tar', type=str, help='Pretrained model path')
 
-    args = parser.parse_args()
     cfg = get_cfg_defaults()
-
     deterministic(42)
-    main(cfg, args)
+    main(cfg)
+
